@@ -1,0 +1,7 @@
+Explanation
+Waypoint Interface: Connects to PX4 using MAVLink and sends a waypoint to the specified latitude, longitude, and altitude.
+Keyboard Control: Listens for keyboard inputs and sends corresponding manual control commands to PX4.
+Testing
+Simulation: Run these scripts with a PX4 SITL (Software In The Loop) environment or a real drone setup to test.
+Connection String: Ensure the connection string ('udp:127.0.0.1:14550' in the examples) matches your PX4 setup. For instance, you might need to adjust the IP address and port for real hardware or different configurations.
+Feel free to adjust these libraries based on your specific requirements or additional features you want to implement!
