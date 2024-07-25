@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2019 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2024 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,48 +32,63 @@
  ****************************************************************************/
 
 /**
- * First order "alpha" IIR digital filter with input saturation
+ * @file bmp581_i2c.cpp
+ *
+ * I2C interface for BMP581
  */
 
-#include <mathlib/mathlib.h>
+#include <drivers/device/i2c.h>
 
-class InnovationLpf final
+#include "bmp581.h"
+
+class BMP581_I2C: public device::I2C, public IBMP581
 {
 public:
-	InnovationLpf() = default;
-	~InnovationLpf() = default;
+	BMP581_I2C(uint8_t bus, uint32_t device, int bus_frequency);
+	virtual ~BMP581_I2C() = default;
 
-	void reset(float val = 0.f) { _x = val; }
+	int init();
 
-	/**
-	 * Update the filter with a new value and returns the filtered state
-	 * The new value is constained by the limit set in setSpikeLimit
-	 * @param val new input
-	 * @param alpha normalized weight of the new input
-	 * @param spike_limit the amplitude of the saturation at the input of the filter
-	 * @return filtered output
-	 */
-	float update(float val, float alpha, float spike_limit)
-	{
-		float val_constrained = math::constrain(val, -spike_limit, spike_limit);
-		float beta = 1.f - alpha;
+	uint8_t get_reg(uint8_t addr);
+	int get_reg_buf(uint8_t addr, uint8_t *buf, uint8_t len);
+	int set_reg(uint8_t value, uint8_t addr);
 
-		_x = beta * _x + alpha * val_constrained;
+	uint32_t get_device_id() const override { return device::I2C::get_device_id(); }
 
-		return _x;
-	}
-
-	/**
-	 * Helper function to compute alpha from dt and the inverse of tau
-	 * @param dt sampling time in seconds
-	 * @param tau_inv inverse of the time constant of the filter
-	 * @return alpha, the normalized weight of a new measurement
-	 */
-	static float computeAlphaFromDtAndTauInv(float dt, float tau_inv)
-	{
-		return math::constrain(dt * tau_inv, 0.f, 1.f);
-	}
-
-private:
-	float _x{}; ///< current state of the filter
+	uint8_t get_device_address() const override { return device::I2C::get_device_address(); }
 };
+
+IBMP581 *bmp581_i2c_interface(uint8_t busnum, uint32_t device, int bus_frequency)
+{
+	return new BMP581_I2C(busnum, device, bus_frequency);
+}
+
+BMP581_I2C::BMP581_I2C(uint8_t bus, uint32_t device, int bus_frequency) :
+	I2C(DRV_BARO_DEVTYPE_BMP581, MODULE_NAME, bus, device, bus_frequency)
+{
+}
+
+int BMP581_I2C::init()
+{
+	return I2C::init();
+}
+
+uint8_t BMP581_I2C::get_reg(uint8_t addr)
+{
+	uint8_t cmd[2] = { (uint8_t)(addr), 0};
+	transfer(&cmd[0], 1, &cmd[1], 1);
+
+	return cmd[1];
+}
+
+int BMP581_I2C::get_reg_buf(uint8_t addr, uint8_t *buf, uint8_t len)
+{
+	const uint8_t cmd = (uint8_t)(addr);
+	return transfer(&cmd, sizeof(cmd), buf, len);
+}
+
+int BMP581_I2C::set_reg(uint8_t value, uint8_t addr)
+{
+	uint8_t cmd[2] = { (uint8_t)(addr), value};
+	return transfer(cmd, sizeof(cmd), nullptr, 0);
+}
