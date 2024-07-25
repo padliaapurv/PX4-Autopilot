@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013-2019 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2021 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,70 +32,60 @@
  ****************************************************************************/
 
 /**
- * @file battery_params.c
+ * @file ghst_telemetry.cpp
  *
- * Parameters defined by the battery lib, shared between all batteries.
+ * IRC Ghost (Immersion RC Ghost) telemetry.
  *
- * @author Julian Oes <julian@oes.ch>
+ * @author Igor Misic <igy1000mb@gmail.com>
+ * @author Juraj Ciberlin <jciberlin1@gmail.com>
  */
 
-/**
- * Low threshold
- *
- * Sets the threshold when the battery will be reported as low.
- * This has to be higher than the critical threshold.
- *
- * @group Battery Calibration
- * @unit norm
- * @min 0.12
- * @max 0.5
- * @decimal 2
- * @increment 0.01
- */
-PARAM_DEFINE_FLOAT(BAT_LOW_THR, 0.15f);
+#pragma once
+
+#include <uORB/Subscription.hpp>
+#include <uORB/topics/battery_status.h>
+#include <uORB/topics/sensor_gps.h>
+#include <drivers/drv_hrt.h>
 
 /**
- * Critical threshold
- *
- * Sets the threshold when the battery will be reported as critically low.
- * This has to be lower than the low threshold. This threshold commonly
- * will trigger RTL.
- *
- * @group Battery Calibration
- * @unit norm
- * @min 0.05
- * @max 0.25
- * @decimal 2
- * @increment 0.01
+ * High-level class that handles sending of GHST telemetry data
  */
-PARAM_DEFINE_FLOAT(BAT_CRIT_THR, 0.07f);
+class GHSTTelemetry
+{
+public:
+	/**
+	 * @param uart_fd file descriptor for the UART to use. It is expected to be configured
+	 * already.
+	 */
+	explicit GHSTTelemetry(int uart_fd);
 
-/**
- * Emergency threshold
- *
- * Sets the threshold when the battery will be reported as dangerously low.
- * This has to be lower than the critical threshold. This threshold commonly
- * will trigger landing.
- *
- * @group Battery Calibration
- * @unit norm
- * @min 0.03
- * @max 0.1
- * @decimal 2
- * @increment 0.01
- */
-PARAM_DEFINE_FLOAT(BAT_EMERGEN_THR, 0.05f);
+	~GHSTTelemetry() = default;
 
-/**
- * Expected battery current in flight.
- *
- * This value is used to initialize the in-flight average current estimation,
- * which in turn is used for estimating remaining flight time and RTL triggering.
- *
- * @group Battery Calibration
- * @unit A
- * @min 0
- * @max 500
- * @increment 0.1
- */
-PARAM_DEFINE_FLOAT(BAT_AVRG_CURRENT, 15.0f);
+	/**
+	 * Send telemetry data. Call this regularly (i.e. at 100Hz), it will automatically
+	 * limit the sending rate.
+	 * @return true if new data sent
+	 */
+	bool update(const hrt_abstime &now);
+
+private:
+	bool send_battery_status();
+	bool send_gps1_status();
+	bool send_gps2_status();
+
+	uORB::Subscription _vehicle_gps_position_sub{ORB_ID(vehicle_gps_position)};
+	uORB::Subscription _battery_status_sub{ORB_ID(battery_status)};
+
+	int _uart_fd;
+	hrt_abstime _last_update {0U};
+	uint32_t _next_type {0U};
+
+	static constexpr uint32_t NUM_DATA_TYPES {3U};	// number of different telemetry data types
+	static constexpr uint32_t UPDATE_RATE_HZ {10U};	// update rate [Hz]
+
+	// Factors that should be applied to get correct values
+	static constexpr float FACTOR_VOLTS_TO_10MV {100.0F};
+	static constexpr float FACTOR_AMPS_TO_10MA {100.0F};
+	static constexpr float FACTOR_MAH_TO_10MAH {0.1F};
+
+};
